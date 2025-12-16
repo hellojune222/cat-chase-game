@@ -1,154 +1,932 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>猫咪追逐游戏 🐱</title>
-    <link rel="stylesheet" href="cat.css">
-</head>
-<body>
-    <!-- 欢迎屏幕 -->
-    <div id="welcomeScreen">
-        <div class="welcome-logo">🐱</div>
-        <h1 class="welcome-title">猫咪追逐游戏</h1>
-        <p class="welcome-subtitle">让你的猫咪享受追逐的乐趣</p>
-        <div class="welcome-buttons">
-            <button class="welcome-button btn-trial" id="btnTrial">
-                <span class="icon">🎮</span>
-                <span>体验一下</span>
-            </button>
-            <button class="welcome-button btn-login" id="btnLogin">
-                <span class="icon">☁️</span>
-                <span>登录/创建账户</span>
-            </button>
-        </div>
-    </div>
+// Firebase 配置（需要替换为你自己的配置）
+const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_PROJECT_ID.appspot.com",
+    messagingSenderId: "YOUR_SENDER_ID",
+    appId: "YOUR_APP_ID"
+};
 
-    <!-- 登录/注册屏幕 -->
-    <div id="authScreen">
-        <div class="auth-container">
-            <h2 class="auth-title">🐱 猫咪账户</h2>
-            
-            <div class="auth-message" id="authMessage"></div>
+// 初始化 Firebase（如果配置了的话）
+let firebaseInitialized = false;
+try {
+    if (firebaseConfig.apiKey !== "YOUR_API_KEY") {
+        firebase.initializeApp(firebaseConfig);
+        firebaseInitialized = true;
+    }
+} catch (e) {
+    console.log("Firebase not configured, using local mode only");
+}
 
-            <div class="auth-tabs">
-                <button class="auth-tab active" data-tab="login">登录</button>
-                <button class="auth-tab" data-tab="register">注册</button>
-            </div>
+// 游戏状态
+let storageMode = null; // 'local' 或 'cloud'
+let currentUser = null;
+let cats = [];
+let currentCatId = null;
+let nextCatId = 1;
+let creatures = [];
+let particles = [];
+let creatureType = 'tadpole';
+let uiLocked = true;
+let unlockTimer = null;
+const unlockHoldMs = 700;
 
-            <!-- 登录表单 -->
-            <form class="auth-form active" id="loginForm">
-                <div class="form-group">
-                    <label>邮箱</label>
-                    <input type="email" id="loginEmail" placeholder="输入你的邮箱" required>
-                </div>
-                <div class="form-group">
-                    <label>密码</label>
-                    <input type="password" id="loginPassword" placeholder="输入密码" required>
-                </div>
-                <button type="submit" class="form-submit">登录</button>
-            </form>
+const difficultyLevels = [
+    { id: 1, label: '新手', score: 10, hitRadius: 1.6 },
+    { id: 2, label: '轻松', score: 15, hitRadius: 1.3 },
+    { id: 3, label: '标准', score: 25, hitRadius: 1.1 },
+    { id: 4, label: '困难', score: 35, hitRadius: 0.9 },
+    { id: 5, label: '极限', score: 50, hitRadius: 0.7 }
+];
+let difficultyIndex = 2; // 默认标准档
 
-            <!-- 注册表单 -->
-            <form class="auth-form" id="registerForm">
-                <div class="form-group">
-                    <label>邮箱</label>
-                    <input type="email" id="registerEmail" placeholder="输入你的邮箱" required>
-                </div>
-                <div class="form-group">
-                    <label>密码</label>
-                    <input type="password" id="registerPassword" placeholder="至少6位" required minlength="6">
-                </div>
-                <div class="form-group">
-                    <label>确认密码</label>
-                    <input type="password" id="registerPasswordConfirm" placeholder="再次输入密码" required minlength="6">
-                </div>
-                <button type="submit" class="form-submit">创建账户</button>
-            </form>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
 
-            <div class="auth-back" id="authBack">← 返回</div>
-        </div>
-    </div>
+const uiElements = [
+    document.getElementById('userInfo'),
+    document.getElementById('catSelector'),
+    document.getElementById('currentScore'),
+    document.getElementById('statsPanel'),
+    document.getElementById('controls'),
+    document.getElementById('manageCatsModal')
+];
 
-    <!-- 游戏容器 -->
-    <div id="gameContainer">
-        <!-- 用户信息 -->
-        <div id="userInfo">
-            <span class="user-mode" id="userMode">体验模式</span>
-            <span id="userEmail"></span>
-            <button class="logout-btn" id="logoutBtn">退出</button>
-        </div>
+// ============ 欢迎屏幕逻辑 ============
+document.getElementById('btnTrial').addEventListener('click', () => {
+    storageMode = 'local';
+    startGame();
+});
 
-        <!-- 猫咪选择器 -->
-        <div id="catSelector"></div>
+document.getElementById('btnLogin').addEventListener('click', () => {
+    if (!firebaseInitialized) {
+        showAuthMessage('请先配置 Firebase，或使用体验模式', 'error');
+        return;
+    }
+    document.getElementById('welcomeScreen').classList.add('hidden');
+    document.getElementById('authScreen').classList.add('show');
+});
 
-        <!-- 当前分数 -->
-        <div id="currentScore">
-            <div class="score-label">本局得分</div>
-            <div class="score-number">0</div>
-        </div>
+// ============ 认证屏幕逻辑 ============
+document.querySelectorAll('.auth-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.auth-form').forEach(f => f.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab + 'Form').classList.add('active');
+        hideAuthMessage();
+    });
+});
 
-        <!-- 统计面板 -->
-        <div id="statsPanel">
-            <h3>📊 当前猫咪统计</h3>
-            <div class="stat-row">
-                <span class="stat-label">总得分: </span>
-                <span class="stat-value" id="totalScore">0</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">游戏时长:</span>
-                <span class="stat-value" id="playTime">0分0秒</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">平均分/10分钟:</span>
-                <span class="stat-value" id="avgScore">0.0</span>
-            </div>
-            <div class="stat-row">
-                <span class="stat-label">捕获次数:</span>
-                <span class="stat-value" id="catchCount">0</span>
-            </div>
+document.getElementById('authBack').addEventListener('click', () => {
+    document.getElementById('authScreen').classList.remove('show');
+    document.getElementById('welcomeScreen').classList.remove('hidden');
+    hideAuthMessage();
+});
 
-            <div id="leaderboard">
-                <h4>🏆 猫咪排行榜</h4>
-                <div id="leaderboardList"></div>
-            </div>
-        </div>
+// 登录
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('loginEmail').value;
+    const password = document.getElementById('loginPassword').value;
 
-        <!-- 控制按钮 -->
-        <div id="controls">
-            <button class="control-button" id="manageCatsBtn">👥 管理猫咪</button>
-            <button class="control-button" id="resetStatsBtn">🔄 重置统计</button>
-            <button class="control-button" id="switchCreatureBtn">🔀 切换动物</button>
-            <div class="difficulty-control">
-                <label for="difficultyRange">难度</label>
-                <input type="range" id="difficultyRange" min="1" max="5" step="1" value="3">
-                <div class="difficulty-hint" id="difficultyHint">标准 · 25分/击</div>
-            </div>
-        </div>
+    try {
+        const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
+        currentUser = userCredential.user;
+        storageMode = 'cloud';
+        showAuthMessage('登录成功！', 'success');
+        setTimeout(() => {
+            document.getElementById('authScreen').classList.remove('show');
+            startGame();
+        }, 1000);
+    } catch (error) {
+        showAuthMessage('登录失败:  ' + error.message, 'error');
+    }
+});
 
-        <!-- 管理猫咪模态框 -->
-        <div id="manageCatsModal" class="modal">
-            <div class="modal-content">
-                <h2>👥 管理猫咪</h2>
-                <div class="cat-edit-list" id="catEditList"></div>
-                <button class="add-cat-input-btn" id="addCatInputBtn">➕ 添加新猫咪</button>
-                <div class="modal-buttons">
-                    <button class="modal-button cancel" id="cancelManageBtn">取消</button>
-                    <button class="modal-button save" id="saveManageBtn">保存</button>
-                </div>
-            </div>
-        </div>
+// 注册
+document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const email = document.getElementById('registerEmail').value;
+    const password = document.getElementById('registerPassword').value;
+    const passwordConfirm = document.getElementById('registerPasswordConfirm').value;
 
-        <canvas id="gameCanvas"></canvas>
-    </div>
+    if (password !== passwordConfirm) {
+        showAuthMessage('两次密码输入不一致', 'error');
+        return;
+    }
 
-    <button id="uiLock" aria-label="长按解锁功能区域" title="长按解锁显示功能 UI">🔒</button>
+    try {
+        const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
+        currentUser = userCredential.user;
+        storageMode = 'cloud';
+        showAuthMessage('注册成功！正在进入游戏... ', 'success');
+        setTimeout(() => {
+            document.getElementById('authScreen').classList.remove('show');
+            startGame();
+        }, 1000);
+    } catch (error) {
+        showAuthMessage('注册失败: ' + error.message, 'error');
+    }
+});
 
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+function showAuthMessage(message, type) {
+    const msgEl = document.getElementById('authMessage');
+    msgEl.textContent = message;
+    msgEl.className = 'auth-message ' + type;
+}
 
-    <script src="cat.js" defer></script>
-</body>
-</html>
+function hideAuthMessage() {
+    document.getElementById('authMessage').className = 'auth-message';
+}
+
+function applyUILockState() {
+    const lockBtn = document.getElementById('uiLock');
+    if (uiLocked) {
+        uiElements.forEach(el => el && el.classList.add('ui-hidden'));
+        lockBtn.textContent = '🔒';
+        lockBtn.classList.remove('unlocked');
+        document.getElementById('manageCatsModal').classList.remove('show');
+    } else {
+        uiElements.forEach(el => el && el.classList.remove('ui-hidden'));
+        lockBtn.textContent = '🔓';
+        lockBtn.classList.add('unlocked');
+    }
+}
+
+function startUnlockTimer() {
+    if (!uiLocked) return;
+    clearTimeout(unlockTimer);
+    unlockTimer = setTimeout(() => {
+        uiLocked = false;
+        applyUILockState();
+    }, unlockHoldMs);
+}
+
+function cancelUnlockTimer() {
+    clearTimeout(unlockTimer);
+}
+
+function lockUI() {
+    uiLocked = true;
+    applyUILockState();
+}
+
+function unlockUI() {
+    uiLocked = false;
+    applyUILockState();
+}
+
+// ============ 游戏启动 ============
+function startGame() {
+    document.getElementById('welcomeScreen').classList.add('hidden');
+    document.getElementById('gameContainer').classList.add('show');
+
+    const userModeEl = document.getElementById('userMode');
+    const userEmailEl = document.getElementById('userEmail');
+
+    if (storageMode === 'local') {
+        userModeEl.textContent = '📱 体验模式';
+        userModeEl.className = 'user-mode';
+        userEmailEl.textContent = '本地存储';
+    } else {
+        userModeEl.textContent = '☁️ 云端同步';
+        userModeEl.className = 'user-mode cloud';
+        userEmailEl.textContent = currentUser.email;
+    }
+
+    loadData();
+    updateAllUI();
+    updateDifficultyUI();
+    initGame();
+    uiLocked = true;
+    applyUILockState();
+}
+
+// 退出登录
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+    if (confirm('确定要退出吗？未保存的数据将会丢失。')) {
+        if (storageMode === 'cloud' && firebaseInitialized) {
+            await firebase.auth().signOut();
+        }
+        location.reload();
+    }
+});
+
+// ============ 数据管理 ============
+function initDefaultCats() {
+    cats = [
+        {
+            id: 1,
+            name: 'teo',
+            totalScore: 0,
+            sessionScore: 0,
+            startTime: Date.now(),
+            playTimeSeconds: 0,
+            catchCount: 0
+        },
+        {
+            id: 2,
+            name: '汤圆',
+            totalScore: 0,
+            sessionScore: 0,
+            startTime: Date.now(),
+            playTimeSeconds: 0,
+            catchCount: 0
+        }
+    ];
+    currentCatId = 1;
+    nextCatId = 3;
+}
+
+async function loadData() {
+    if (storageMode === 'cloud' && firebaseInitialized && currentUser) {
+        try {
+            const snapshot = await firebase.database()
+                .ref('users/' + currentUser.uid + '/gameData')
+                .once('value');
+
+            const data = snapshot.val();
+            if (data) {
+                cats = data.cats || [];
+                currentCatId = data.currentCatId || (cats.length > 0 ? cats[0].id : null);
+                nextCatId = data.nextCatId || 1;
+            } else {
+                initDefaultCats();
+            }
+        } catch (error) {
+            console.error('Load from cloud failed:', error);
+            initDefaultCats();
+        }
+    } else {
+        const saved = localStorage.getItem('catGameDataMulti');
+        if (saved) {
+            const data = JSON.parse(saved);
+            cats = data.cats || [];
+            currentCatId = data.currentCatId || (cats.length > 0 ? cats[0].id : null);
+            nextCatId = data.nextCatId || 1;
+        } else {
+            initDefaultCats();
+        }
+    }
+
+    if (cats.length === 0) {
+        initDefaultCats();
+    }
+}
+
+async function saveData() {
+    const data = {
+        cats,
+        currentCatId,
+        nextCatId,
+        lastUpdate: Date.now()
+    };
+
+    if (storageMode === 'cloud' && firebaseInitialized && currentUser) {
+        try {
+            await firebase.database()
+                .ref('users/' + currentUser.uid + '/gameData')
+                .set(data);
+        } catch (error) {
+            console.error('Save to cloud failed:', error);
+        }
+    } else {
+        localStorage.setItem('catGameDataMulti', JSON.stringify(data));
+    }
+}
+
+function getCurrentCat() {
+    return cats.find(cat => cat.id === currentCatId);
+}
+
+function addCat(name) {
+    const newCat = {
+        id: nextCatId++,
+        name: name || `猫咪${nextCatId}`,
+        totalScore: 0,
+        sessionScore: 0,
+        startTime: Date.now(),
+        playTimeSeconds: 0,
+        catchCount: 0
+    };
+    cats.push(newCat);
+    if (!currentCatId) {
+        currentCatId = newCat.id;
+    }
+    return newCat;
+}
+
+function switchCat(catId) {
+    currentCatId = catId;
+    const cat = getCurrentCat();
+    if (cat) {
+        cat.startTime = Date.now();
+        cat.sessionScore = 0;
+    }
+    renderCatSelector();
+    updateAllUI();
+    saveData();
+}
+
+// ============ UI 渲染 ============
+function renderCatSelector() {
+    const selector = document.getElementById('catSelector');
+    selector.innerHTML = '';
+
+    cats.forEach(cat => {
+        const button = document.createElement('button');
+        button.className = 'cat-button';
+        if (cat.id === currentCatId) {
+            button.classList.add('active');
+        }
+        button.innerHTML = `
+            <span class="cat-name">🐱 ${cat.name}</span>
+            <span class="cat-score">总分:  ${cat.totalScore}</span>
+        `;
+        button.addEventListener('click', () => {
+            switchCat(cat.id);
+        });
+        selector.appendChild(button);
+    });
+
+    const addButton = document.createElement('button');
+    addButton.className = 'add-cat-button';
+    addButton.innerHTML = '➕';
+    addButton.addEventListener('click', () => {
+        const name = prompt('请输入新猫咪的名字: ');
+        if (name && name.trim()) {
+            addCat(name.trim());
+            renderCatSelector();
+            updateAllUI();
+            saveData();
+        }
+    });
+    selector.appendChild(addButton);
+}
+
+function updateStats() {
+    const cat = getCurrentCat();
+    if (!cat) return;
+
+    cat.playTimeSeconds += 1;
+
+    const minutes = Math.floor(cat.playTimeSeconds / 60);
+    const seconds = cat.playTimeSeconds % 60;
+
+    const avgPer10Min = cat.playTimeSeconds > 0
+        ? (cat.totalScore / cat.playTimeSeconds * 600).toFixed(1)
+        : '0.0';
+
+    document.getElementById('totalScore').textContent = cat.totalScore;
+    document.getElementById('playTime').textContent = `${minutes}分${seconds}秒`;
+    document.getElementById('avgScore').textContent = avgPer10Min;
+    document.getElementById('catchCount').textContent = cat.catchCount;
+
+    updateLeaderboard();
+}
+
+function updateLeaderboard() {
+    const leaderboardList = document.getElementById('leaderboardList');
+    leaderboardList.innerHTML = '';
+
+    const sortedCats = [...cats].sort((a, b) => {
+        const avgA = a.playTimeSeconds > 0 ? (a.totalScore / a.playTimeSeconds * 600) : 0;
+        const avgB = b.playTimeSeconds > 0 ? (b.totalScore / b.playTimeSeconds * 600) : 0;
+        return avgB - avgA;
+    });
+
+    const medals = ['🥇', '🥈', '🥉'];
+
+    sortedCats.forEach((cat, index) => {
+        const avgScore = cat.playTimeSeconds > 0
+            ? (cat.totalScore / cat.playTimeSeconds * 600).toFixed(1)
+            : '0.0';
+
+        const item = document.createElement('div');
+        item.className = 'leaderboard-item';
+        item.innerHTML = `
+            <span class="leaderboard-rank">${medals[index] || (index + 1) + '.'}</span>
+            <span class="leaderboard-name">${cat.name}</span>
+            <span class="leaderboard-score">${avgScore}/10分</span>
+        `;
+        leaderboardList.appendChild(item);
+    });
+}
+
+function updateAllUI() {
+    renderCatSelector();
+    const cat = getCurrentCat();
+    if (cat) {
+        document.querySelector('#currentScore .score-number').textContent = cat.sessionScore;
+    }
+    updateStats();
+}
+
+function updateDifficultyUI() {
+    const slider = document.getElementById('difficultyRange');
+    const hint = document.getElementById('difficultyHint');
+    const level = difficultyLevels[difficultyIndex];
+    if (slider) {
+        slider.value = String(level.id);
+    }
+    if (hint) {
+        hint.textContent = `${level.label} · ${level.score}分/击`;
+    }
+}
+
+// ============ 游戏逻辑 ============
+const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+function playSound(frequency, duration) {
+    try {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.frequency.value = frequency;
+        oscillator.type = 'sine';
+
+        gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + duration);
+    } catch (e) {}
+}
+
+function playPeekSound() {
+    playSound(520, 0.12);
+    setTimeout(() => playSound(620, 0.12), 120);
+}
+
+function startDashSound() {
+    try {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        oscillator.type = 'triangle';
+        oscillator.frequency.setValueAtTime(200, audioContext.currentTime);
+        oscillator.frequency.linearRampToValueAtTime(260, audioContext.currentTime + 0.6);
+        gainNode.gain.setValueAtTime(0.26, audioContext.currentTime);
+        gainNode.gain.linearRampToValueAtTime(0.12, audioContext.currentTime + 0.6);
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        oscillator.start();
+        return { oscillator, gainNode };
+    } catch (e) {
+        return null;
+    }
+}
+
+function stopDashSound(sound) {
+    if (!sound) return;
+    try {
+        sound.gainNode.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 0.05);
+        sound.oscillator.stop(audioContext.currentTime + 0.08);
+    } catch (e) {}
+}
+
+class Creature {
+    constructor() {
+        this.headRadius = Math.random() * 6 + 28;
+        this.tailLength = this.headRadius * 4.8;
+        this.tailThickness = this.headRadius * 0.18;
+        this.color = '#000';
+        this.wavePhase = Math.random() * Math.PI * 2;
+        this.state = 'hidden';
+        this.peekProgress = 0;
+        this.pauseTimer = 0;
+        this.hiddenTimer = 120; // ~2s before first peek
+        this.dashSpeed = Math.random() * 3 + 13;
+        this.dashSound = null;
+        this.finished = false;
+        this.peekSoundPlayed = false;
+
+        const edges = ['left', 'right', 'top', 'bottom'];
+        this.spawnEdge = edges[Math.floor(Math.random() * edges.length)];
+        const margin = this.headRadius * 2;
+        const pickY = Math.random() * (canvas.height - margin * 2) + margin;
+        const pickX = Math.random() * (canvas.width - margin * 2) + margin;
+
+        const diagonalChance = 0.35;
+        let targetX = pickX;
+        let targetY = pickY;
+
+        switch (this.spawnEdge) {
+            case 'left':
+                this.x = -this.headRadius * 1.8;
+                this.y = pickY;
+                if (Math.random() < diagonalChance) {
+                    targetX = canvas.width + this.headRadius * 2;
+                    targetY = Math.random() < 0.5 ? -this.headRadius * 2 : canvas.height + this.headRadius * 2;
+                } else {
+                    targetX = canvas.width + this.headRadius * 2;
+                }
+                break;
+            case 'right':
+                this.x = canvas.width + this.headRadius * 1.8;
+                this.y = pickY;
+                if (Math.random() < diagonalChance) {
+                    targetX = -this.headRadius * 2;
+                    targetY = Math.random() < 0.5 ? -this.headRadius * 2 : canvas.height + this.headRadius * 2;
+                } else {
+                    targetX = -this.headRadius * 2;
+                }
+                break;
+            case 'top':
+                this.x = pickX;
+                this.y = -this.headRadius * 1.8;
+                if (Math.random() < diagonalChance) {
+                    targetY = canvas.height + this.headRadius * 2;
+                    targetX = Math.random() < 0.5 ? -this.headRadius * 2 : canvas.width + this.headRadius * 2;
+                } else {
+                    targetY = canvas.height + this.headRadius * 2;
+                }
+                break;
+            default:
+                this.x = pickX;
+                this.y = canvas.height + this.headRadius * 1.8;
+                if (Math.random() < diagonalChance) {
+                    targetY = -this.headRadius * 2;
+                    targetX = Math.random() < 0.5 ? -this.headRadius * 2 : canvas.width + this.headRadius * 2;
+                } else {
+                    targetY = -this.headRadius * 2;
+                }
+                break;
+        }
+
+        const dirVecX = targetX - this.x;
+        const dirVecY = targetY - this.y;
+        const len = Math.max(1e-3, Math.hypot(dirVecX, dirVecY));
+        this.dir = { x: dirVecX / len, y: dirVecY / len };
+
+        this.peekDistance = this.headRadius * 2.4;
+        this.basePos = { x: this.x, y: this.y };
+    }
+
+    update() {
+        if (this.finished) return;
+
+        switch (this.state) {
+            case 'hidden':
+                this.hiddenTimer--;
+                if (this.hiddenTimer <= 0) {
+                    this.x = this.basePos.x;
+                    this.y = this.basePos.y;
+                    this.state = 'peeking';
+                }
+                break;
+            case 'peeking':
+                if (!this.peekSoundPlayed) {
+                    playPeekSound();
+                    this.peekSoundPlayed = true;
+                }
+                this.peekProgress = Math.min(1, this.peekProgress + 0.07);
+                this.updatePeekPosition(this.peekProgress);
+                if (this.peekProgress >= 1) {
+                    this.state = 'pause';
+                    this.pauseTimer = 60;
+                }
+                break;
+            case 'pause':
+                this.pauseTimer--;
+                this.updatePeekPosition(1);
+                if (this.pauseTimer <= 0) {
+                    this.state = 'dash';
+                    this.dashSound = startDashSound();
+                }
+                break;
+            case 'dash':
+                this.x += this.dir.x * this.dashSpeed;
+                this.y += this.dir.y * this.dashSpeed;
+                this.wavePhase += 0.48;
+                if (this.isOffscreen(140)) {
+                    stopDashSound(this.dashSound);
+                    this.finished = true;
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    draw() {
+        if (this.finished) return;
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        const angle = Math.atan2(this.dir.y, this.dir.x);
+        ctx.rotate(angle);
+        this.drawTadpole();
+        ctx.restore();
+    }
+
+    drawTadpole() {
+        const tailWave = Math.sin(this.wavePhase) * this.tailLength * 0.09;
+        ctx.strokeStyle = this.color;
+        ctx.lineCap = 'round';
+        ctx.lineWidth = this.tailThickness;
+        ctx.beginPath();
+        ctx.moveTo(-this.headRadius * 0.2, 0);
+        ctx.quadraticCurveTo(-this.tailLength * 0.35, tailWave, -this.tailLength, tailWave * 0.6);
+        ctx.stroke();
+
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, this.headRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        const eyeRadius = this.headRadius * 0.28;
+        const pupil = eyeRadius * 0.45;
+        const eyeOffsetX = this.headRadius * -0.22;
+        const eyeOffsetY = this.headRadius * -0.18;
+
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(eyeOffsetX, eyeOffsetY, eyeRadius, 0, Math.PI * 2);
+        ctx.arc(eyeOffsetX + eyeRadius * 1.15, eyeOffsetY, eyeRadius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#000';
+        ctx.beginPath();
+        ctx.arc(eyeOffsetX, eyeOffsetY, pupil, 0, Math.PI * 2);
+        ctx.arc(eyeOffsetX + eyeRadius * 1.15, eyeOffsetY, pupil, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    isClicked(x, y, hitRadiusMultiplier = 1.1) {
+        const dx = x - this.x;
+        const dy = y - this.y;
+        return Math.sqrt(dx * dx + dy * dy) < this.headRadius * hitRadiusMultiplier;
+    }
+
+    runAway(fromX, fromY) {
+        // Movement is scripted; ignore runAway to keep path consistent.
+    }
+
+    updatePeekPosition(progress) {
+        this.x = this.basePos.x + this.dir.x * this.peekDistance * progress;
+        this.y = this.basePos.y + this.dir.y * this.peekDistance * progress;
+        this.wavePhase += 0.22;
+    }
+
+    isOffscreen(buffer) {
+        return this.x < -buffer || this.x > canvas.width + buffer || this.y < -buffer || this.y > canvas.height + buffer;
+    }
+}
+
+class Particle {
+    constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.size = Math.random() * 8 + 4;
+        this.speedX = (Math.random() - 0.5) * 10;
+        this.speedY = (Math.random() - 0.5) * 10;
+        this.color = color;
+        this.life = 30;
+    }
+
+    update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        this.speedY += 0.3;
+        this.life--;
+    }
+
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = this.life / 30;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
+}
+
+function spawnCreature() {
+    if (creatures.length === 0) {
+        creatures.push(new Creature());
+    }
+}
+
+function handleTouch(x, y) {
+    const cat = getCurrentCat();
+    if (!cat) return;
+
+    const difficulty = difficultyLevels[difficultyIndex];
+
+    let caught = false;
+
+    creatures.forEach((creature, index) => {
+        if (creature.isClicked(x, y, difficulty.hitRadius)) {
+            cat.sessionScore += difficulty.score;
+            cat.totalScore += difficulty.score;
+            cat.catchCount += 1;
+
+            playSound(800, 0.1);
+            stopDashSound(creature.dashSound);
+
+            for (let i = 0; i < 15; i++) {
+                particles.push(new Particle(
+                    creature.x,
+                    creature.y,
+                    creature.color
+                ));
+            }
+
+            creatures.splice(index, 1);
+            spawnCreature();
+            caught = true;
+
+            updateAllUI();
+            saveData();
+        }
+    });
+
+    if (!caught) {
+        playSound(200, 0.05);
+    }
+}
+
+function gameLoop() {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    creatures.forEach(creature => {
+        creature.update();
+        creature.draw();
+    });
+
+    creatures = creatures.filter(creature => !creature.finished);
+
+    particles = particles.filter(particle => {
+        particle.update();
+        particle.draw();
+        return particle.life > 0;
+    });
+
+    requestAnimationFrame(gameLoop);
+}
+
+function initGame() {
+    creatures = [];
+    spawnCreature();
+
+    canvas.addEventListener('click', (e) => {
+        handleTouch(e.clientX, e.clientY);
+    });
+
+    canvas.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const touch = e.touches[0];
+        handleTouch(touch.clientX, touch.clientY);
+    });
+
+    setInterval(() => {
+        if (creatures.length < 1) {
+            spawnCreature();
+        }
+    }, 3000);
+
+    setInterval(() => {
+        if (getCurrentCat()) {
+            updateStats();
+            saveData();
+        }
+    }, 1000);
+
+    gameLoop();
+}
+
+// ============ UI 锁定按钮逻辑 ============
+const uiLockBtn = document.getElementById('uiLock');
+uiLockBtn.addEventListener('mousedown', startUnlockTimer);
+uiLockBtn.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    startUnlockTimer();
+});
+['mouseup', 'mouseleave'].forEach(evt => uiLockBtn.addEventListener(evt, cancelUnlockTimer));
+uiLockBtn.addEventListener('touchend', () => {
+    cancelUnlockTimer();
+    if (!uiLocked) lockUI();
+});
+uiLockBtn.addEventListener('click', () => {
+    if (!uiLocked) {
+        lockUI();
+    }
+});
+
+// ============ 控制按钮 ============
+const difficultyRange = document.getElementById('difficultyRange');
+if (difficultyRange) {
+    difficultyRange.addEventListener('input', (e) => {
+        const val = parseInt(e.target.value, 10);
+        const idx = Math.min(Math.max(val - 1, 0), difficultyLevels.length - 1);
+        difficultyIndex = idx;
+        updateDifficultyUI();
+    });
+}
+
+document.getElementById('manageCatsBtn').addEventListener('click', () => {
+    const modal = document.getElementById('manageCatsModal');
+    const editList = document.getElementById('catEditList');
+    editList.innerHTML = '';
+
+    cats.forEach(cat => {
+        const item = document.createElement('div');
+        item.className = 'cat-edit-item';
+        item.innerHTML = `
+            <input type="text" value="${cat.name}" data-cat-id="${cat.id}" maxlength="15">
+            <button class="remove-btn" data-cat-id="${cat.id}">🗑️</button>
+        `;
+        editList.appendChild(item);
+    });
+
+    editList.querySelectorAll('.remove-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const catId = parseInt(btn.dataset.catId);
+            if (cats.length <= 1) {
+                alert('至少需要保留一只猫咪！');
+                return;
+            }
+            if (confirm('确定要删除这只猫咪的所有数据吗？')) {
+                btn.parentElement.remove();
+            }
+        });
+    });
+
+    modal.classList.add('show');
+});
+
+document.getElementById('addCatInputBtn').addEventListener('click', () => {
+    const editList = document.getElementById('catEditList');
+    const item = document.createElement('div');
+    item.className = 'cat-edit-item';
+    item.innerHTML = `
+        <input type="text" value="新猫咪" data-cat-id="new-${Date.now()}" maxlength="15">
+        <button class="remove-btn">🗑️</button>
+    `;
+    item.querySelector('.remove-btn').addEventListener('click', () => {
+        item.remove();
+    });
+    editList.appendChild(item);
+});
+
+document.getElementById('saveManageBtn').addEventListener('click', () => {
+    const editList = document.getElementById('catEditList');
+    const inputs = editList.querySelectorAll('input');
+
+    const oldCats = [...cats];
+    cats = [];
+
+    inputs.forEach(input => {
+        const catId = input.dataset.catId;
+        const name = input.value.trim() || '未命名猫咪';
+
+        if (catId.startsWith('new-')) {
+            addCat(name);
+        } else {
+            const oldCat = oldCats.find(c => c.id === parseInt(catId));
+            if (oldCat) {
+                oldCat.name = name;
+                cats.push(oldCat);
+            }
+        }
+    });
+
+    if (!cats.find(c => c.id === currentCatId)) {
+        currentCatId = cats.length > 0 ? cats[0].id : null;
+    }
+
+    updateAllUI();
+    saveData();
+    document.getElementById('manageCatsModal').classList.remove('show');
+});
+
+document.getElementById('cancelManageBtn').addEventListener('click', () => {
+    document.getElementById('manageCatsModal').classList.remove('show');
+});
+
+document.getElementById('resetStatsBtn').addEventListener('click', () => {
+    if (confirm('确定要重置所有猫咪的统计数据吗？此操作不可恢复！')) {
+        cats.forEach(cat => {
+            cat.totalScore = 0;
+            cat.sessionScore = 0;
+            cat.playTimeSeconds = 0;
+            cat.catchCount = 0;
+            cat.startTime = Date.now();
+        });
+        updateAllUI();
+        saveData();
+    }
+});
+
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
