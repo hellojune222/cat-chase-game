@@ -519,6 +519,45 @@
             background: rgba(255, 255, 255, 0.2);
         }
 
+        /* UI 锁定按钮与隐藏态 */
+        #uiLock {
+            position: fixed;
+            top: 50%;
+            right: 18px;
+            transform: translateY(-50%);
+            width: 64px;
+            height: 64px;
+            border-radius: 18px;
+            border: 3px solid rgba(255, 255, 255, 0.6);
+            background: rgba(0, 0, 0, 0.55);
+            color: #fff;
+            font-size: 28px;
+            cursor: pointer;
+            z-index: 30;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+            transition: all 0.25s ease;
+        }
+
+        #uiLock.unlocked {
+            background: rgba(81, 207, 102, 0.75);
+            border-color: rgba(255, 255, 255, 0.85);
+            color: #0b2f16;
+        }
+
+        #uiLock:active {
+            transform: translateY(-50%) scale(0.96);
+        }
+
+        #userInfo, #catSelector, #currentScore, #statsPanel, #controls, #manageCatsModal {
+            transition: opacity 0.25s ease, transform 0.25s ease;
+        }
+
+        .ui-hidden {
+            opacity: 0;
+            pointer-events: none;
+            transform: translateX(14px);
+        }
+
         /* 管理猫咪模态框 */
         .modal {
             display: none;
@@ -794,6 +833,8 @@
         <canvas id="gameCanvas"></canvas>
     </div>
 
+    <button id="uiLock" aria-label="长按解锁功能区域" title="长按解锁显示功能 UI">🔒</button>
+
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
@@ -831,11 +872,23 @@
         let creatures = [];
         let particles = [];
         let creatureType = 'mouse';
+        let uiLocked = true;
+        let unlockTimer = null;
+        const unlockHoldMs = 700;
 
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         canvas.width = window.innerWidth;
         canvas. height = window.innerHeight;
+
+        const uiElements = [
+            document.getElementById('userInfo'),
+            document.getElementById('catSelector'),
+            document.getElementById('currentScore'),
+            document.getElementById('statsPanel'),
+            document.getElementById('controls'),
+            document.getElementById('manageCatsModal')
+        ];
 
         // ============ 欢迎屏幕逻辑 ============
         document.getElementById('btnTrial').addEventListener('click', () => {
@@ -925,6 +978,33 @@
             document.getElementById('authMessage').className = 'auth-message';
         }
 
+        function applyUILockState() {
+            const lockBtn = document.getElementById('uiLock');
+            if (uiLocked) {
+                uiElements.forEach(el => el && el.classList.add('ui-hidden'));
+                lockBtn.textContent = '🔒';
+                lockBtn.classList.remove('unlocked');
+                document.getElementById('manageCatsModal').classList.remove('show');
+            } else {
+                uiElements.forEach(el => el && el.classList.remove('ui-hidden'));
+                lockBtn.textContent = '🔓';
+                lockBtn.classList.add('unlocked');
+            }
+        }
+
+        function startUnlockTimer() {
+            if (!uiLocked) return;
+            clearTimeout(unlockTimer);
+            unlockTimer = setTimeout(() => {
+                uiLocked = false;
+                applyUILockState();
+            }, unlockHoldMs);
+        }
+
+        function cancelUnlockTimer() {
+            clearTimeout(unlockTimer);
+        }
+
         // ============ 游戏启动 ============
         function startGame() {
             document.getElementById('welcomeScreen').classList.add('hidden');
@@ -947,6 +1027,8 @@
             loadData();
             updateAllUI();
             initGame();
+            uiLocked = true;
+            applyUILockState();
         }
 
         // 退出登录
@@ -1470,6 +1552,22 @@
             gameLoop();
         }
 
+        // ============ UI 锁定按钮逻辑 ============
+        const uiLockBtn = document.getElementById('uiLock');
+        uiLockBtn.addEventListener('mousedown', startUnlockTimer);
+        uiLockBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            startUnlockTimer();
+        });
+        ['mouseup', 'mouseleave'].forEach(evt => uiLockBtn.addEventListener(evt, cancelUnlockTimer));
+        uiLockBtn.addEventListener('touchend', cancelUnlockTimer);
+        uiLockBtn.addEventListener('click', () => {
+            if (!uiLocked) {
+                uiLocked = true;
+                applyUILockState();
+            }
+        });
+
         // ============ 控制按钮 ============
         document.getElementById('manageCatsBtn').addEventListener('click', () => {
             const modal = document.getElementById('manageCatsModal');
@@ -1580,3 +1678,4 @@
     </script>
 </body>
 </html>
+
