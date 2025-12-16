@@ -4,7 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>猫咪追逐游戏 🐱</title>
-    <link rel="stylesheet" href="cat.css">
+        <script>
+            (function() {
+                const path = window.location.pathname;
+                const base = path.endsWith('/') ? path : path.substring(0, path.lastIndexOf('/') + 1);
+                const css = document.createElement('link');
+                css.rel = 'stylesheet';
+                css.href = base + 'cat.css';
+                document.head.appendChild(css);
+                const js = document.createElement('script');
+                js.src = base + 'cat.js';
+                js.defer = true;
+                document.head.appendChild(js);
+                console.log('cat game base path:', base);
+            })();
+        </script>
 </head>
 <body>
     <!-- 欢迎屏幕 -->
@@ -149,6 +163,6 @@
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
 
-    <script src="cat.js" defer></script>
+    
 </body>
 </html>
