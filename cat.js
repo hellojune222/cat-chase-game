@@ -33,6 +33,17 @@ let uiLocked = true;
 let unlockTimer = null;
 const unlockHoldMs = 700;
 
+function launchFullScreen() {
+    const element = document.documentElement;
+    const request = element.requestFullscreen
+        || element.mozRequestFullScreen
+        || element.webkitRequestFullscreen
+        || element.msRequestFullscreen;
+    if (request) {
+        request.call(element).catch(() => {});
+    }
+}
+
 const difficultyLevels = [
     { id: 1, label: '新手', score: 10, hitRadius: 1.6 },
     { id: 2, label: '轻松', score: 15, hitRadius: 1.3 },
@@ -59,6 +70,7 @@ const uiElements = [
 // ============ 欢迎屏幕逻辑 ============
 document.getElementById('btnTrial').addEventListener('click', () => {
     storageMode = 'local';
+    launchFullScreen();
     startGame();
 });
 
@@ -99,6 +111,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         currentUser = userCredential.user;
         storageMode = 'cloud';
         showAuthMessage('登录成功！', 'success');
+        launchFullScreen();
         setTimeout(() => {
             document.getElementById('authScreen').classList.remove('show');
             startGame();
@@ -125,6 +138,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
         currentUser = userCredential.user;
         storageMode = 'cloud';
         showAuthMessage('注册成功！正在进入游戏... ', 'success');
+        launchFullScreen();
         setTimeout(() => {
             document.getElementById('authScreen').classList.remove('show');
             startGame();
@@ -185,6 +199,7 @@ function unlockUI() {
 function startGame() {
     document.getElementById('welcomeScreen').classList.add('hidden');
     document.getElementById('gameContainer').classList.add('show');
+    launchFullScreen();
 
     const userModeEl = document.getElementById('userMode');
     const userEmailEl = document.getElementById('userEmail');
