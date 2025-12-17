@@ -31,8 +31,8 @@ let particles = [];
 let creatureType = 'tadpole';
 let backgroundColor = '#ffffff';
 let uiLocked = true;
-let unlockTimer = null;
-const unlockHoldMs = 2000;
+let lastLockTap = 0;
+const lockDoubleTapMs = 350;
 
 function launchFullScreen() {
     const element = document.documentElement;
@@ -207,19 +207,6 @@ function applyUILockState() {
     }
 }
 
-function startUnlockTimer() {
-    if (!uiLocked) return;
-    clearTimeout(unlockTimer);
-    unlockTimer = setTimeout(() => {
-        uiLocked = false;
-        applyUILockState();
-    }, unlockHoldMs);
-}
-
-function cancelUnlockTimer() {
-    clearTimeout(unlockTimer);
-}
-
 function lockUI() {
     uiLocked = true;
     applyUILockState();
@@ -228,6 +215,22 @@ function lockUI() {
 function unlockUI() {
     uiLocked = false;
     applyUILockState();
+}
+
+function handleLockTap() {
+    const now = Date.now();
+    if (now - lastLockTap <= lockDoubleTapMs) {
+        uiLocked = !uiLocked;
+        applyUILockState();
+        lastLockTap = 0;
+        return;
+    }
+    lastLockTap = now;
+    setTimeout(() => {
+        if (Date.now() - lastLockTap > lockDoubleTapMs) {
+            lastLockTap = 0;
+        }
+    }, lockDoubleTapMs + 60);
 }
 
 // ============ 游戏启动 ============
@@ -311,7 +314,6 @@ async function loadData() {
                 cats = data.cats || [];
                 currentCatId = data.currentCatId || (cats.length > 0 ? cats[0].id : null);
                 nextCatId = data.nextCatId || 1;
-                backgroundColor = data.backgroundColor || backgroundColor;
                 creatureType = data.creatureType || creatureType;
                 if (typeof data.difficultyIndex === 'number') {
                     difficultyIndex = Math.min(Math.max(data.difficultyIndex, 0), difficultyLevels.length - 1);
@@ -330,7 +332,6 @@ async function loadData() {
             cats = data.cats || [];
             currentCatId = data.currentCatId || (cats.length > 0 ? cats[0].id : null);
             nextCatId = data.nextCatId || 1;
-            backgroundColor = data.backgroundColor || backgroundColor;
             creatureType = data.creatureType || creatureType;
             if (typeof data.difficultyIndex === 'number') {
                 difficultyIndex = Math.min(Math.max(data.difficultyIndex, 0), difficultyLevels.length - 1);
@@ -350,7 +351,6 @@ async function saveData() {
         cats,
         currentCatId,
         nextCatId,
-        backgroundColor,
         creatureType,
         difficultyIndex,
         lastUpdate: Date.now()
@@ -511,13 +511,6 @@ function updateDifficultyUI() {
 }
 
 function syncSettingsUI() {
-    document.querySelectorAll('.color-swatch').forEach(btn => {
-        if (btn.dataset.color === backgroundColor) {
-            btn.classList.add('active');
-        } else {
-            btn.classList.remove('active');
-        }
-    });
     document.querySelectorAll('.creature-chip').forEach(btn => {
         if (btn.dataset.creature === creatureType) {
             btn.classList.add('active');
@@ -531,12 +524,6 @@ function applyBackground() {
     if (canvas) {
         canvas.style.background = backgroundColor;
     }
-}
-
-function setBackground(color) {
-    backgroundColor = color;
-    applyBackground();
-    saveData();
 }
 
 function setCreatureType(type) {
@@ -982,20 +969,9 @@ function initGame() {
 
 // ============ UI 锁定按钮逻辑 ============
 const uiLockBtn = document.getElementById('uiLock');
-uiLockBtn.addEventListener('mousedown', startUnlockTimer);
-uiLockBtn.addEventListener('touchstart', (e) => {
+uiLockBtn.addEventListener('pointerup', (e) => {
     e.preventDefault();
-    startUnlockTimer();
-});
-['mouseup', 'mouseleave'].forEach(evt => uiLockBtn.addEventListener(evt, cancelUnlockTimer));
-uiLockBtn.addEventListener('touchend', () => {
-    cancelUnlockTimer();
-});
-uiLockBtn.addEventListener('click', () => {
-    // 解锁后点击可重新隐藏 UI；锁定状态下点击不解锁，仍需长按
-    if (!uiLocked) {
-        lockUI();
-    }
+    handleLockTap();
 });
 
 // ============ 控制按钮 ============
@@ -1180,15 +1156,6 @@ document.querySelectorAll('.quick-dock-btn').forEach(btn => {
 });
 
 // 背景颜色选择
-document.querySelectorAll('.color-swatch').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const color = btn.dataset.color;
-        setBackground(color);
-        document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-    });
-});
-
 // 生物类型选择
 document.querySelectorAll('.creature-chip').forEach(btn => {
     btn.addEventListener('click', () => {
