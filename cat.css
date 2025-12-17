@@ -394,6 +394,11 @@ body {
     max-height: 60vh;
     overflow-y: auto;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    display: none;
+}
+
+#statsPanel.panel-open {
+    display: block;
 }
 
 #statsPanel h3 {
@@ -493,6 +498,11 @@ body {
     gap: 10px;
     z-index: 20;
     max-width: 400px;
+    display: none;
+}
+
+#controls.panel-open {
+    display: flex;
 }
 
 #switchCreatureBtn {
@@ -543,6 +553,111 @@ body {
     font-size: 14px;
     color: #fff;
     opacity: 0.9;
+}
+
+.floating-panel {
+    position: absolute;
+    bottom: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.85);
+    border: 2px solid #fff;
+    border-radius: 14px;
+    padding: 16px;
+    color: #fff;
+    z-index: 22;
+    width: 320px;
+    max-width: calc(100vw - 40px);
+    display: none;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.5);
+}
+
+.floating-panel.panel-open {
+    display: block;
+}
+
+.floating-panel h3 {
+    margin-bottom: 12px;
+    font-size: 20px;
+    color: #FFD93D;
+}
+
+.setting-section {
+    margin-bottom: 14px;
+}
+
+.section-title {
+    font-size: 14px;
+    color: #ccc;
+    margin-bottom: 8px;
+}
+
+.color-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+}
+
+.color-swatch {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    border: 2px solid rgba(255,255,255,0.5);
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.color-swatch.active {
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.6);
+    transform: scale(1.05);
+}
+
+.chip-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.chip {
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: 2px solid rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-size: 14px;
+}
+
+.chip.active {
+    border-color: #FFD93D;
+    background: rgba(255,217,61,0.2);
+    color: #FFD93D;
+}
+
+.quick-dock {
+    position: fixed;
+    right: 16px;
+    top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 28;
+}
+
+.quick-dock-btn {
+    padding: 10px 12px;
+    background: rgba(0,0,0,0.78);
+    border: 2px solid rgba(255,255,255,0.65);
+    color: #fff;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 15px;
+    transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.quick-dock-btn:active {
+    transform: scale(0.95);
+    background: rgba(255,255,255,0.12);
 }
 
 /* UI 锁定按钮与隐藏态 */
@@ -630,6 +745,18 @@ body {
     gap: 10px;
     margin: 15px 0;
     align-items: center;
+}
+
+.cat-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+}
+
+.cat-row input[type="radio"] {
+    width: 18px;
+    height: 18px;
 }
 
 .cat-edit-item input {
