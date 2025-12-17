@@ -29,9 +29,10 @@ let nextCatId = 1;
 let creatures = [];
 let particles = [];
 let creatureType = 'tadpole';
+let backgroundColor = '#ffffff';
 let uiLocked = true;
 let unlockTimer = null;
-const unlockHoldMs = 700;
+const unlockHoldMs = 2000;
 
 function launchFullScreen() {
     const element = document.documentElement;
@@ -45,13 +46,13 @@ function launchFullScreen() {
 }
 
 const difficultyLevels = [
-    { id: 1, label: '新手', score: 10, hitRadius: 1.6 },
-    { id: 2, label: '轻松', score: 15, hitRadius: 1.3 },
-    { id: 3, label: '标准', score: 25, hitRadius: 1.1 },
-    { id: 4, label: '困难', score: 35, hitRadius: 0.9 },
-    { id: 5, label: '极限', score: 50, hitRadius: 0.7 }
+    { id: 1, label: '新手', score: 10, hitRadius: 2.0 },
+    { id: 2, label: '轻松', score: 20, hitRadius: 1.6 },
+    { id: 3, label: '标准', score: 25, hitRadius: 1.3 },
+    { id: 4, label: '困难', score: 35, hitRadius: 1.1 },
+    { id: 5, label: '极限', score: 50, hitRadius: 1.0 }
 ];
-let difficultyIndex = 2; // 默认标准档
+let difficultyIndex = 2; // 默认标准档（索引2，对应 id 3）
 
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -63,9 +64,35 @@ const uiElements = [
     document.getElementById('catSelector'),
     document.getElementById('currentScore'),
     document.getElementById('statsPanel'),
-    document.getElementById('controls'),
-    document.getElementById('manageCatsModal')
+    document.getElementById('controls')
 ];
+
+const quickDock = document.getElementById('quickDock');
+const panelRefs = {
+    stats: document.getElementById('statsPanel'),
+    controls: document.getElementById('controls'),
+    settings: document.getElementById('settingsPanel')
+};
+
+function hideAllPanels() {
+    Object.values(panelRefs).forEach(panel => {
+        if (panel) {
+            panel.classList.remove('panel-open');
+            panel.classList.add('ui-hidden');
+        }
+    });
+}
+
+function togglePanel(key) {
+    const panel = panelRefs[key];
+    if (!panel) return;
+    const willOpen = !panel.classList.contains('panel-open');
+    hideAllPanels();
+    if (willOpen) {
+        panel.classList.remove('ui-hidden');
+        panel.classList.add('panel-open');
+    }
+}
 
 // ============ 欢迎屏幕逻辑 ============
 document.getElementById('btnTrial').addEventListener('click', () => {
@@ -162,11 +189,19 @@ function applyUILockState() {
     const lockBtn = document.getElementById('uiLock');
     if (uiLocked) {
         uiElements.forEach(el => el && el.classList.add('ui-hidden'));
+        hideAllPanels();
+        document.getElementById('quickDock')?.classList.add('ui-hidden');
         lockBtn.textContent = '🔒';
         lockBtn.classList.remove('unlocked');
         document.getElementById('manageCatsModal').classList.remove('show');
     } else {
-        uiElements.forEach(el => el && el.classList.remove('ui-hidden'));
+        document.getElementById('quickDock')?.classList.remove('ui-hidden');
+        uiElements.forEach(el => el && el.classList.add('ui-hidden'));
+        ['userInfo', 'currentScore'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.classList.remove('ui-hidden');
+        });
+        // 解锁时只展示入口，不自动展开面板
         lockBtn.textContent = '🔓';
         lockBtn.classList.add('unlocked');
     }
@@ -220,6 +255,12 @@ function startGame() {
     initGame();
     uiLocked = true;
     applyUILockState();
+    // 确保首屏弹出猫咪选择
+    setTimeout(() => {
+        if (!document.getElementById('manageCatsModal').classList.contains('show')) {
+            openCatManager(true);
+        }
+    }, 60);
 }
 
 // 退出登录
@@ -270,6 +311,11 @@ async function loadData() {
                 cats = data.cats || [];
                 currentCatId = data.currentCatId || (cats.length > 0 ? cats[0].id : null);
                 nextCatId = data.nextCatId || 1;
+                backgroundColor = data.backgroundColor || backgroundColor;
+                creatureType = data.creatureType || creatureType;
+                if (typeof data.difficultyIndex === 'number') {
+                    difficultyIndex = Math.min(Math.max(data.difficultyIndex, 0), difficultyLevels.length - 1);
+                }
             } else {
                 initDefaultCats();
             }
@@ -284,6 +330,11 @@ async function loadData() {
             cats = data.cats || [];
             currentCatId = data.currentCatId || (cats.length > 0 ? cats[0].id : null);
             nextCatId = data.nextCatId || 1;
+            backgroundColor = data.backgroundColor || backgroundColor;
+            creatureType = data.creatureType || creatureType;
+            if (typeof data.difficultyIndex === 'number') {
+                difficultyIndex = Math.min(Math.max(data.difficultyIndex, 0), difficultyLevels.length - 1);
+            }
         } else {
             initDefaultCats();
         }
@@ -299,6 +350,9 @@ async function saveData() {
         cats,
         currentCatId,
         nextCatId,
+        backgroundColor,
+        creatureType,
+        difficultyIndex,
         lastUpdate: Date.now()
     };
 
@@ -439,6 +493,8 @@ function updateAllUI() {
     if (cat) {
         document.querySelector('#currentScore .score-number').textContent = cat.sessionScore;
     }
+    applyBackground();
+    syncSettingsUI();
     updateStats();
 }
 
@@ -452,6 +508,43 @@ function updateDifficultyUI() {
     if (hint) {
         hint.textContent = `${level.label} · ${level.score}分/击`;
     }
+}
+
+function syncSettingsUI() {
+    document.querySelectorAll('.color-swatch').forEach(btn => {
+        if (btn.dataset.color === backgroundColor) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    document.querySelectorAll('.creature-chip').forEach(btn => {
+        if (btn.dataset.creature === creatureType) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+}
+
+function applyBackground() {
+    if (canvas) {
+        canvas.style.background = backgroundColor;
+    }
+}
+
+function setBackground(color) {
+    backgroundColor = color;
+    applyBackground();
+    saveData();
+}
+
+function setCreatureType(type) {
+    creatureType = type;
+    // 重置当前生物以应用新外观
+    creatures = [];
+    spawnCreature();
+    saveData();
 }
 
 // ============ 游戏逻辑 ============
@@ -512,7 +605,7 @@ class Creature {
         this.headRadius = Math.random() * 6 + 28;
         this.tailLength = this.headRadius * 4.8;
         this.tailThickness = this.headRadius * 0.18;
-        this.color = '#000';
+        this.color = creatureType === 'cockroach' ? '#5a3a1a' : creatureType === 'mouse' ? '#555' : '#000';
         this.wavePhase = Math.random() * Math.PI * 2;
         this.state = 'hidden';
         this.peekProgress = 0;
@@ -637,7 +730,13 @@ class Creature {
         ctx.translate(this.x, this.y);
         const angle = Math.atan2(this.dir.y, this.dir.x);
         ctx.rotate(angle);
-        this.drawTadpole();
+        if (creatureType === 'cockroach') {
+            this.drawRoach();
+        } else if (creatureType === 'mouse') {
+            this.drawMouse();
+        } else {
+            this.drawTadpole();
+        }
         ctx.restore();
     }
 
@@ -671,6 +770,69 @@ class Creature {
         ctx.beginPath();
         ctx.arc(eyeOffsetX, eyeOffsetY, pupil, 0, Math.PI * 2);
         ctx.arc(eyeOffsetX + eyeRadius * 1.15, eyeOffsetY, pupil, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    drawRoach() {
+        // body
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.headRadius * 0.9, this.headRadius * 1.2, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // head
+        ctx.beginPath();
+        ctx.ellipse(this.headRadius * 0.9, 0, this.headRadius * 0.45, this.headRadius * 0.6, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // legs
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 3;
+        for (let i = -1; i <= 1; i++) {
+            ctx.beginPath();
+            ctx.moveTo(-this.headRadius * 0.5, this.headRadius * 0.6 * i);
+            ctx.lineTo(-this.headRadius * 1.2, this.headRadius * 1.1 * i);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(this.headRadius * 0.2, this.headRadius * 0.6 * i);
+            ctx.lineTo(this.headRadius * 0.9, this.headRadius * 1.1 * i);
+            ctx.stroke();
+        }
+        // antennae
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(this.headRadius * 1.1, -this.headRadius * 0.3);
+        ctx.lineTo(this.headRadius * 1.6, -this.headRadius * 0.9);
+        ctx.moveTo(this.headRadius * 1.1, this.headRadius * 0.3);
+        ctx.lineTo(this.headRadius * 1.6, this.headRadius * 0.9);
+        ctx.stroke();
+    }
+
+    drawMouse() {
+        ctx.fillStyle = this.color;
+        // body
+        ctx.beginPath();
+        ctx.ellipse(0, 0, this.headRadius * 1.1, this.headRadius * 0.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // head
+        ctx.beginPath();
+        ctx.ellipse(this.headRadius * 0.9, 0, this.headRadius * 0.55, this.headRadius * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        // ears
+        ctx.fillStyle = '#777';
+        ctx.beginPath();
+        ctx.arc(this.headRadius * 1.2, -this.headRadius * 0.3, this.headRadius * 0.25, 0, Math.PI * 2);
+        ctx.arc(this.headRadius * 1.2, this.headRadius * 0.3, this.headRadius * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+        // tail
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.moveTo(-this.headRadius * 1.1, 0);
+        ctx.quadraticCurveTo(-this.headRadius * 2.5, this.headRadius * 0.6, -this.headRadius * 3.4, 0);
+        ctx.stroke();
+        // eye
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.arc(this.headRadius * 1.35, 0, this.headRadius * 0.12, 0, Math.PI * 2);
         ctx.fill();
     }
 
@@ -828,9 +990,9 @@ uiLockBtn.addEventListener('touchstart', (e) => {
 ['mouseup', 'mouseleave'].forEach(evt => uiLockBtn.addEventListener(evt, cancelUnlockTimer));
 uiLockBtn.addEventListener('touchend', () => {
     cancelUnlockTimer();
-    if (!uiLocked) lockUI();
 });
 uiLockBtn.addEventListener('click', () => {
+    // 解锁后点击可重新隐藏 UI；锁定状态下点击不解锁，仍需长按
     if (!uiLocked) {
         lockUI();
     }
@@ -844,88 +1006,143 @@ if (difficultyRange) {
         const idx = Math.min(Math.max(val - 1, 0), difficultyLevels.length - 1);
         difficultyIndex = idx;
         updateDifficultyUI();
+        saveData();
     });
 }
-
 document.getElementById('manageCatsBtn').addEventListener('click', () => {
+    openCatManager(false);
+});
+
+function openCatManager(forceOpen = false) {
     const modal = document.getElementById('manageCatsModal');
     const editList = document.getElementById('catEditList');
-    editList.innerHTML = '';
+    let selectedId = currentCatId || (cats[0] && cats[0].id);
 
-    cats.forEach(cat => {
+    const rebuildList = () => {
+        editList.innerHTML = '';
+        cats.forEach(cat => {
+            const item = document.createElement('div');
+            item.className = 'cat-edit-item';
+            item.dataset.catId = cat.id;
+            item.innerHTML = `
+                <label class="cat-row">
+                    <input type="radio" name="catSelect" value="${cat.id}" ${cat.id === selectedId ? 'checked' : ''}>
+                    <input type="text" name="catName" value="${cat.name}" data-cat-id="${cat.id}" maxlength="15">
+                    <button class="remove-btn" data-cat-id="${cat.id}">🗑️</button>
+                </label>
+            `;
+            editList.appendChild(item);
+        });
+
+        editList.querySelectorAll('input[type="radio"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                selectedId = e.target.value;
+            });
+        });
+
+        editList.querySelectorAll('.remove-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (editList.children.length <= 1) {
+                    alert('至少需要保留一只猫咪！');
+                    return;
+                }
+                btn.closest('.cat-edit-item').remove();
+                if (btn.dataset.catId === String(selectedId)) {
+                    const firstRow = editList.querySelector('input[type="radio"]');
+                    if (firstRow) {
+                        firstRow.checked = true;
+                        selectedId = firstRow.value;
+                    }
+                }
+            });
+        });
+    };
+
+    rebuildList();
+
+    document.getElementById('addCatInputBtn').onclick = () => {
+        const newId = `new-${Date.now()}`;
         const item = document.createElement('div');
         item.className = 'cat-edit-item';
+        item.dataset.catId = newId;
         item.innerHTML = `
-            <input type="text" value="${cat.name}" data-cat-id="${cat.id}" maxlength="15">
-            <button class="remove-btn" data-cat-id="${cat.id}">🗑️</button>
+            <label class="cat-row">
+                <input type="radio" name="catSelect" value="${newId}" checked>
+                <input type="text" name="catName" value="新猫咪" data-cat-id="${newId}" maxlength="15">
+                <button class="remove-btn" data-cat-id="${newId}">🗑️</button>
+            </label>
         `;
         editList.appendChild(item);
-    });
+        editList.querySelectorAll('.remove-btn').forEach(btn => {
+            btn.onclick = () => {
+                if (editList.children.length <= 1) {
+                    alert('至少需要保留一只猫咪！');
+                    return;
+                }
+                btn.closest('.cat-edit-item').remove();
+            };
+        });
+        editList.querySelectorAll('input[type="radio"]').forEach(r => r.checked = false);
+        item.querySelector('input[type="radio"]').checked = true;
+        selectedId = newId;
+    };
 
-    editList.querySelectorAll('.remove-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const catId = parseInt(btn.dataset.catId);
-            if (cats.length <= 1) {
-                alert('至少需要保留一只猫咪！');
-                return;
-            }
-            if (confirm('确定要删除这只猫咪的所有数据吗？')) {
-                btn.parentElement.remove();
+    document.getElementById('saveManageBtn').onclick = () => {
+        const rows = Array.from(editList.querySelectorAll('.cat-edit-item'));
+        if (rows.length === 0) {
+            alert('至少需要保留一只猫咪！');
+            return;
+        }
+        const oldMap = new Map(cats.map(c => [String(c.id), c]));
+        const newCats = [];
+        rows.forEach(row => {
+            const id = row.dataset.catId;
+            const nameInput = row.querySelector('input[name="catName"]');
+            const radio = row.querySelector('input[type="radio"]');
+            const name = (nameInput.value || '').trim() || '未命名猫咪';
+            if (id.startsWith('new-')) {
+                const newCat = {
+                    id: nextCatId++,
+                    name,
+                    totalScore: 0,
+                    sessionScore: 0,
+                    startTime: Date.now(),
+                    playTimeSeconds: 0,
+                    catchCount: 0
+                };
+                newCats.push(newCat);
+                if (radio.checked) {
+                    selectedId = newCat.id;
+                }
+            } else {
+                const existing = oldMap.get(id);
+                if (existing) {
+                    existing.name = name;
+                    newCats.push(existing);
+                    if (radio.checked) {
+                        selectedId = existing.id;
+                    }
+                }
             }
         });
-    });
+        cats = newCats;
+        if (!cats.find(c => c.id === selectedId)) {
+            selectedId = cats[0].id;
+        }
+        currentCatId = typeof selectedId === 'string' ? parseInt(selectedId, 10) : selectedId;
+        renderCatSelector();
+        updateAllUI();
+        saveData();
+        modal.classList.remove('show');
+    };
+
+    document.getElementById('cancelManageBtn').onclick = () => {
+        if (forceOpen) return; // 首次进入要求选择，禁用取消
+        modal.classList.remove('show');
+    };
 
     modal.classList.add('show');
-});
-
-document.getElementById('addCatInputBtn').addEventListener('click', () => {
-    const editList = document.getElementById('catEditList');
-    const item = document.createElement('div');
-    item.className = 'cat-edit-item';
-    item.innerHTML = `
-        <input type="text" value="新猫咪" data-cat-id="new-${Date.now()}" maxlength="15">
-        <button class="remove-btn">🗑️</button>
-    `;
-    item.querySelector('.remove-btn').addEventListener('click', () => {
-        item.remove();
-    });
-    editList.appendChild(item);
-});
-
-document.getElementById('saveManageBtn').addEventListener('click', () => {
-    const editList = document.getElementById('catEditList');
-    const inputs = editList.querySelectorAll('input');
-
-    const oldCats = [...cats];
-    cats = [];
-
-    inputs.forEach(input => {
-        const catId = input.dataset.catId;
-        const name = input.value.trim() || '未命名猫咪';
-
-        if (catId.startsWith('new-')) {
-            addCat(name);
-        } else {
-            const oldCat = oldCats.find(c => c.id === parseInt(catId));
-            if (oldCat) {
-                oldCat.name = name;
-                cats.push(oldCat);
-            }
-        }
-    });
-
-    if (!cats.find(c => c.id === currentCatId)) {
-        currentCatId = cats.length > 0 ? cats[0].id : null;
-    }
-
-    updateAllUI();
-    saveData();
-    document.getElementById('manageCatsModal').classList.remove('show');
-});
-
-document.getElementById('cancelManageBtn').addEventListener('click', () => {
-    document.getElementById('manageCatsModal').classList.remove('show');
-});
+}
 
 document.getElementById('resetStatsBtn').addEventListener('click', () => {
     if (confirm('确定要重置所有猫咪的统计数据吗？此操作不可恢复！')) {
@@ -944,4 +1161,40 @@ document.getElementById('resetStatsBtn').addEventListener('click', () => {
 window.addEventListener('resize', () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+});
+
+// 快捷入口按钮
+document.querySelectorAll('.quick-dock-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const target = btn.dataset.target;
+        if (target === 'cats') {
+            openCatManager(false);
+        } else if (target === 'stats') {
+            togglePanel('stats');
+        } else if (target === 'settings') {
+            togglePanel('settings');
+        } else if (target === 'controls') {
+            togglePanel('controls');
+        }
+    });
+});
+
+// 背景颜色选择
+document.querySelectorAll('.color-swatch').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const color = btn.dataset.color;
+        setBackground(color);
+        document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
+});
+
+// 生物类型选择
+document.querySelectorAll('.creature-chip').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const type = btn.dataset.creature;
+        setCreatureType(type);
+        document.querySelectorAll('.creature-chip').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+    });
 });
