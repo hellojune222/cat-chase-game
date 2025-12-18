@@ -35,6 +35,23 @@ let lastLockTap = 0;
 const lockDoubleTapMs = 350;
 let audioContextResumed = false;
 
+function initCanvas() {
+    canvas = document.getElementById('gameCanvas');
+    if (!canvas) {
+        console.error('Canvas element not found!');
+        return false;
+    }
+    ctx = canvas.getContext('2d');
+    if (!ctx) {
+        console.error('Failed to get 2D context!');
+        return false;
+    }
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+    console.log('Canvas initialized:', canvas.width, 'x', canvas.height);
+    return true;
+}
+
 function launchFullScreen() {
     const element = document.documentElement;
     const request = element.requestFullscreen
@@ -55,25 +72,28 @@ const difficultyLevels = [
 ];
 let difficultyIndex = 2; // 默认标准档（索引2，对应 id 3）
 
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+let canvas = null;
+let ctx = null;
 
-const uiElements = [
-    document.getElementById('userInfo'),
-    document.getElementById('catSelector'),
-    document.getElementById('currentScore'),
-    document.getElementById('statsPanel'),
-    document.getElementById('controls')
-];
+let uiElements = [];
+let quickDock = null;
+let panelRefs = {};
 
-const quickDock = document.getElementById('quickDock');
-const panelRefs = {
-    stats: document.getElementById('statsPanel'),
-    controls: document.getElementById('controls'),
-    settings: document.getElementById('settingsPanel')
-};
+function initUIElements() {
+    uiElements = [
+        document.getElementById('userInfo'),
+        document.getElementById('catSelector'),
+        document.getElementById('currentScore'),
+        document.getElementById('statsPanel'),
+        document.getElementById('controls')
+    ];
+    quickDock = document.getElementById('quickDock');
+    panelRefs = {
+        stats: document.getElementById('statsPanel'),
+        controls: document.getElementById('controls'),
+        settings: document.getElementById('settingsPanel')
+    };
+}
 
 function hideAllPanels() {
     Object.values(panelRefs).forEach(panel => {
@@ -250,6 +270,15 @@ function handleLockTap() {
 
 // ============ 游戏启动 ============
 function startGame() {
+    console.log('Starting game...');
+    
+    // 初始化canvas和UI元素
+    if (!initCanvas()) {
+        alert('无法初始化游戏画布，请刷新页面重试');
+        return;
+    }
+    initUIElements();
+    
     document.getElementById('welcomeScreen').classList.add('hidden');
     document.getElementById('gameContainer').classList.add('show');
     launchFullScreen();
@@ -273,12 +302,21 @@ function startGame() {
     initGame();
     uiLocked = true;
     applyUILockState();
-    // 确保首屏弹出猫咪选择
+    
+    // 确保首屏弹出猫咪选择 - iOS需要更长的延迟
+    console.log('Scheduling cat manager to open...');
     setTimeout(() => {
-        if (!document.getElementById('manageCatsModal').classList.contains('show')) {
-            openCatManager(true);
+        console.log('Attempting to open cat manager...');
+        const modal = document.getElementById('manageCatsModal');
+        if (modal) {
+            console.log('Modal found, opening...');
+            if (!modal.classList.contains('show')) {
+                openCatManager(true);
+            }
+        } else {
+            console.error('manageCatsModal not found!');
         }
-    }, 60);
+    }, 300);
 }
 
 // 退出登录
@@ -615,6 +653,12 @@ function stopDashSound(sound) {
 
 class Creature {
     constructor() {
+        if (!canvas) {
+            console.error('Canvas not initialized when creating Creature');
+            this.finished = true;
+            return;
+        }
+        
         this.headRadius = Math.random() * 6 + 28;
         this.tailLength = this.headRadius * 4.8;
         this.tailThickness = this.headRadius * 0.18;
@@ -946,6 +990,11 @@ function handleTouch(x, y) {
 }
 
 function gameLoop() {
+    if (!ctx || !canvas) {
+        console.error('Canvas or context not initialized in gameLoop');
+        return;
+    }
+    
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -1006,11 +1055,15 @@ function initGame() {
 }
 
 // ============ UI 锁定按钮逻辑 ============
-const uiLockBtn = document.getElementById('uiLock');
-uiLockBtn.addEventListener('click', (e) => {
-    e.preventDefault();
-    handleLockTap();
-});
+function initUILockButton() {
+    const uiLockBtn = document.getElementById('uiLock');
+    if (uiLockBtn) {
+        uiLockBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            handleLockTap();
+        });
+    }
+}
 
 // ============ 控制按钮 ============
 const difficultyRange = document.getElementById('difficultyRange');
@@ -1028,9 +1081,19 @@ document.getElementById('manageCatsBtn').addEventListener('click', () => {
 });
 
 function openCatManager(forceOpen = false) {
+    console.log('openCatManager called, forceOpen:', forceOpen);
     const modal = document.getElementById('manageCatsModal');
+    if (!modal) {
+        console.error('Modal element not found!');
+        return;
+    }
     const editList = document.getElementById('catEditList');
+    if (!editList) {
+        console.error('Edit list element not found!');
+        return;
+    }
     let selectedId = currentCatId || (cats[0] && cats[0].id);
+    console.log('Selected cat ID:', selectedId, 'Total cats:', cats.length);
 
     const rebuildList = () => {
         editList.innerHTML = '';
@@ -1151,11 +1214,16 @@ function openCatManager(forceOpen = false) {
     };
 
     document.getElementById('cancelManageBtn').onclick = () => {
-        if (forceOpen) return; // 首次进入要求选择，禁用取消
+        if (forceOpen) {
+            console.log('Cancel disabled in force mode');
+            return; // 首次进入要求选择，禁用取消
+        }
         modal.classList.remove('show');
     };
 
+    console.log('Opening modal...');
     modal.classList.add('show');
+    console.log('Modal classes:', modal.className);
 }
 
 document.getElementById('resetStatsBtn').addEventListener('click', () => {
@@ -1195,11 +1263,26 @@ document.querySelectorAll('.quick-dock-btn').forEach(btn => {
 
 // 背景颜色选择
 // 生物类型选择
-document.querySelectorAll('.creature-chip').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const type = btn.dataset.creature;
-        setCreatureType(type);
-        document.querySelectorAll('.creature-chip').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
+function initCreatureTypeButtons() {
+    document.querySelectorAll('.creature-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const type = btn.dataset.creature;
+            setCreatureType(type);
+            document.querySelectorAll('.creature-chip').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
     });
-});
+}
+
+// 确保DOM完全加载后再初始化
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        console.log('DOM loaded, initializing UI...');
+        initUILockButton();
+        initCreatureTypeButtons();
+    });
+} else {
+    console.log('DOM already loaded, initializing UI...');
+    initUILockButton();
+    initCreatureTypeButtons();
+}
