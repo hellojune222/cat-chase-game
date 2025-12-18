@@ -33,6 +33,7 @@ let backgroundColor = '#ffffff';
 let uiLocked = true;
 let lastLockTap = 0;
 const lockDoubleTapMs = 350;
+let audioContextResumed = false;
 
 function launchFullScreen() {
     const element = document.documentElement;
@@ -96,6 +97,7 @@ function togglePanel(key) {
 
 // ============ 欢迎屏幕逻辑 ============
 document.getElementById('btnTrial').addEventListener('click', () => {
+    resumeAudioContext();
     storageMode = 'local';
     startGame();
     // 延迟全屏请求，确保游戏先启动
@@ -140,6 +142,7 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         const userCredential = await firebase.auth().signInWithEmailAndPassword(email, password);
         currentUser = userCredential.user;
         storageMode = 'cloud';
+        resumeAudioContext();
         showAuthMessage('登录成功！', 'success');
         setTimeout(() => {
             document.getElementById('authScreen').classList.remove('show');
@@ -170,6 +173,7 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
         const userCredential = await firebase.auth().createUserWithEmailAndPassword(email, password);
         currentUser = userCredential.user;
         storageMode = 'cloud';
+        resumeAudioContext();
         showAuthMessage('注册成功！正在进入游戏... ', 'success');
         setTimeout(() => {
             document.getElementById('authScreen').classList.remove('show');
@@ -548,6 +552,17 @@ function setCreatureType(type) {
 // ============ 游戏逻辑 ============
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 
+function resumeAudioContext() {
+    if (!audioContextResumed && audioContext.state === 'suspended') {
+        audioContext.resume().then(() => {
+            audioContextResumed = true;
+            console.log('AudioContext resumed');
+        }).catch(e => {
+            console.log('Failed to resume AudioContext:', e);
+        });
+    }
+}
+
 function playSound(frequency, duration) {
     try {
         const oscillator = audioContext.createOscillator();
@@ -885,7 +900,9 @@ class Particle {
 
 function spawnCreature() {
     if (creatures.length === 0) {
-        creatures.push(new Creature());
+        const newCreature = new Creature();
+        creatures.push(newCreature);
+        console.log('Creature spawned:', newCreature.state, 'at position:', newCreature.x, newCreature.y);
     }
 }
 
@@ -932,6 +949,11 @@ function gameLoop() {
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    if (creatures.length === 0) {
+        console.log('No creatures in gameLoop, spawning...');
+        spawnCreature();
+    }
+
     creatures.forEach(creature => {
         creature.update();
         creature.draw();
@@ -950,14 +972,19 @@ function gameLoop() {
 
 function initGame() {
     creatures = [];
+    console.log('Initializing game, spawning creature...');
     spawnCreature();
-
+    console.log('Creatures after spawn:', creatures.length);
+    
+    // 确保画布恢复AudioContext
     canvas.addEventListener('click', (e) => {
+        resumeAudioContext();
         handleTouch(e.clientX, e.clientY);
     });
 
     canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
+        resumeAudioContext();
         const touch = e.touches[0];
         handleTouch(touch.clientX, touch.clientY);
     });
