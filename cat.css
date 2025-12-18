@@ -64,7 +64,7 @@ body {
 .welcome-buttons {
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: 35px;
     width: 100%;
     max-width: 400px;
     align-items: stretch;
@@ -76,19 +76,19 @@ body {
 }
 
 .welcome-button {
-    padding: 20px 40px;
-    font-size: 24px;
+    padding: 15px 30px;
+    font-size: 20px;
     font-weight: bold;
     border: none;
-    border-radius: 15px;
+    border-radius: 12px;
     cursor: pointer;
     transition: all 0.3s;
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 15px;
-    min-height: 70px;
+    gap: 12px;
+    min-height: 58px;
     width: 100%;
 }
 
@@ -107,7 +107,7 @@ body {
 }
 
 .welcome-button .icon {
-    font-size: 32px;
+    font-size: 26px;
 }
 
 /* 登录/注册屏幕 */
