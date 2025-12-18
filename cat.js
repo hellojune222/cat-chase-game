@@ -190,12 +190,14 @@ function applyUILockState() {
     if (uiLocked) {
         uiElements.forEach(el => el && el.classList.add('ui-hidden'));
         hideAllPanels();
-        document.getElementById('quickDock')?.classList.add('ui-hidden');
+        const quickDockEl = document.getElementById('quickDock');
+        if (quickDockEl) quickDockEl.classList.add('ui-hidden');
         lockBtn.textContent = '🔒';
         lockBtn.classList.remove('unlocked');
         document.getElementById('manageCatsModal').classList.remove('show');
     } else {
-        document.getElementById('quickDock')?.classList.remove('ui-hidden');
+        const quickDockEl = document.getElementById('quickDock');
+        if (quickDockEl) quickDockEl.classList.remove('ui-hidden');
         uiElements.forEach(el => el && el.classList.add('ui-hidden'));
         ['userInfo', 'currentScore'].forEach(id => {
             const el = document.getElementById(id);
@@ -969,7 +971,7 @@ function initGame() {
 
 // ============ UI 锁定按钮逻辑 ============
 const uiLockBtn = document.getElementById('uiLock');
-uiLockBtn.addEventListener('pointerup', (e) => {
+uiLockBtn.addEventListener('click', (e) => {
     e.preventDefault();
     handleLockTap();
 });
