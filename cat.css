@@ -60,12 +60,19 @@ body {
     text-align: center;
 }
 
+
 .welcome-buttons {
     display: flex;
     flex-direction: column;
     gap: 20px;
     width: 100%;
     max-width: 400px;
+    align-items: stretch;
+}
+
+.welcome-buttons > * {
+    flex-shrink: 0;
+    margin: 0;
 }
 
 .welcome-button {
@@ -81,6 +88,8 @@ body {
     align-items: center;
     justify-content: center;
     gap: 15px;
+    min-height: 70px;
+    width: 100%;
 }
 
 .welcome-button:active {
