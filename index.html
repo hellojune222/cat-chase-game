@@ -12,10 +12,21 @@
             css.rel = 'stylesheet';
             css.href = base + 'cat.css';
             document.head.appendChild(css);
-            const js = document.createElement('script');
-            js.src = base + 'cat.js';
-            js.defer = true;
-            document.head.appendChild(js);
+            
+            // 确保在DOM完全加载后再加载JS
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    const js = document.createElement('script');
+                    js.src = base + 'cat.js';
+                    document.body.appendChild(js);
+                    console.log('cat game loaded after DOM ready');
+                });
+            } else {
+                const js = document.createElement('script');
+                js.src = base + 'cat.js';
+                document.body.appendChild(js);
+                console.log('cat game loaded immediately');
+            }
             console.log('cat game base path:', base);
         })();
     </script>
