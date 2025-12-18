@@ -133,10 +133,26 @@
             <button class="control-button" id="manageCatsBtn">👥 管理猫咪</button>
             <button class="control-button" id="resetStatsBtn">🔄 重置统计</button>
             <button class="control-button" id="switchCreatureBtn">🔀 切换动物</button>
-            <div class="difficulty-control">
-                <label for="difficultyRange">难度</label>
-                <input type="range" id="difficultyRange" min="1" max="5" step="1" value="3">
-                <div class="difficulty-hint" id="difficultyHint">标准 · 25分/击</div>
+        </div>
+
+        <div id="settingsPanel" class="floating-panel ui-hidden">
+            <h3>⚙️ 设置</h3>
+
+            <div class="setting-section">
+                <div class="section-title">目标动物</div>
+                <div class="chip-group">
+                    <button class="chip creature-chip" data-creature="tadpole">蝌蚪</button>
+                    <button class="chip creature-chip" data-creature="cockroach">蟑螂</button>
+                    <button class="chip creature-chip" data-creature="mouse">老鼠</button>
+                </div>
+            </div>
+            <div class="setting-section">
+                <div class="section-title">难度</div>
+                <div class="difficulty-control">
+                    <label for="difficultyRange">命中与得分</label>
+                    <input type="range" id="difficultyRange" min="1" max="5" step="1" value="3">
+                    <div class="difficulty-hint" id="difficultyHint">标准 · 25分/击</div>
+                </div>
             </div>
         </div>
 
@@ -154,6 +170,13 @@
         </div>
 
         <canvas id="gameCanvas"></canvas>
+    </div>
+
+    <div id="quickDock" class="quick-dock ui-hidden">
+        <button class="quick-dock-btn" data-target="cats">🧑 猫用户</button>
+        <button class="quick-dock-btn" data-target="stats">📊 统计</button>
+        <button class="quick-dock-btn" data-target="controls">🎮 控制</button>
+        <button class="quick-dock-btn" data-target="settings">🎨 设置</button>
     </div>
 
     <button id="uiLock" aria-label="长按解锁功能区域" title="长按解锁显示功能 UI">🔒</button>
