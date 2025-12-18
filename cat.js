@@ -97,8 +97,11 @@ function togglePanel(key) {
 // ============ 欢迎屏幕逻辑 ============
 document.getElementById('btnTrial').addEventListener('click', () => {
     storageMode = 'local';
-    launchFullScreen();
     startGame();
+    // 延迟全屏请求，确保游戏先启动
+    setTimeout(() => {
+        launchFullScreen();
+    }, 100);
 });
 
 document.getElementById('btnLogin').addEventListener('click', () => {
@@ -138,10 +141,13 @@ document.getElementById('loginForm').addEventListener('submit', async (e) => {
         currentUser = userCredential.user;
         storageMode = 'cloud';
         showAuthMessage('登录成功！', 'success');
-        launchFullScreen();
         setTimeout(() => {
             document.getElementById('authScreen').classList.remove('show');
             startGame();
+            // 延迟全屏请求
+            setTimeout(() => {
+                launchFullScreen();
+            }, 100);
         }, 1000);
     } catch (error) {
         showAuthMessage('登录失败:  ' + error.message, 'error');
@@ -165,10 +171,13 @@ document.getElementById('registerForm').addEventListener('submit', async (e) => 
         currentUser = userCredential.user;
         storageMode = 'cloud';
         showAuthMessage('注册成功！正在进入游戏... ', 'success');
-        launchFullScreen();
         setTimeout(() => {
             document.getElementById('authScreen').classList.remove('show');
             startGame();
+            // 延迟全屏请求
+            setTimeout(() => {
+                launchFullScreen();
+            }, 100);
         }, 1000);
     } catch (error) {
         showAuthMessage('注册失败: ' + error.message, 'error');
