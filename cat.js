@@ -64,11 +64,11 @@ function launchFullScreen() {
 }
 
 const difficultyLevels = [
-    { id: 1, label: '新手', score: 10, hitRadius: 2.0 },
-    { id: 2, label: '轻松', score: 20, hitRadius: 1.6 },
-    { id: 3, label: '标准', score: 25, hitRadius: 1.3 },
-    { id: 4, label: '困难', score: 35, hitRadius: 1.1 },
-    { id: 5, label: '极限', score: 50, hitRadius: 1.0 }
+    { id: 1, label: '新手', score: 10, hitRadius: 2.0, speedMultiplier: 0.33 },
+    { id: 2, label: '轻松', score: 20, hitRadius: 1.6, speedMultiplier: 0.5 },
+    { id: 3, label: '标准', score: 25, hitRadius: 1.3, speedMultiplier: 0.6 },
+    { id: 4, label: '困难', score: 35, hitRadius: 1.1, speedMultiplier: 0.8 },
+    { id: 5, label: '极限', score: 50, hitRadius: 1.0, speedMultiplier: 1 }
 ];
 let difficultyIndex = 2; // 默认标准档（索引2，对应 id 3）
 
@@ -668,7 +668,9 @@ class Creature {
         this.peekProgress = 0;
         this.pauseTimer = 0;
         this.hiddenTimer = 120; // ~2s before first peek
-        this.dashSpeed = Math.random() * 3 + 13;
+        const baseSpeed = Math.random() * 3 + 13;
+        const difficulty = difficultyLevels[difficultyIndex];
+        this.dashSpeed = baseSpeed * (difficulty.speedMultiplier || 1.0);
         this.dashSound = null;
         this.finished = false;
         this.peekSoundPlayed = false;
